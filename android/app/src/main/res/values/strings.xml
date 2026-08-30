@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Trening</string>
+    <string name="title_activity_main">Trening</string>
+    <string name="package_name">com.lukasz.trening</string>
+    <string name="custom_url_scheme">com.lukasz.trening</string>
+</resources>
