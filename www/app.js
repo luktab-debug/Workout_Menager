@@ -184,7 +184,8 @@ function startSession(planId) {
   DATA.activeSession = {
     planId,
     date: new Date().toISOString(),
-    startedAt: Date.now(),
+    started: false,
+    startedAt: null,
     warmupDone: plan.warmup.map(() => false),
     entries,
     notes: '',
@@ -192,6 +193,15 @@ function startSession(planId) {
   };
   saveData(DATA);
   setView('session');
+}
+
+function beginWorkoutTimer() {
+  const s = DATA.activeSession;
+  if (!s || s.started) return;
+  s.started = true;
+  s.startedAt = Date.now();
+  saveData(DATA);
+  render();
 }
 
 function sessionTitle() {
@@ -219,7 +229,7 @@ function renderSession() {
   const plan = findPlan(s.planId);
   if (!plan) return '<div class="empty-state">Nie znaleziono planu.</div>';
 
-  const elapsed = Math.max(0, Date.now() - s.startedAt);
+  const elapsed = s.started ? Math.max(0, Date.now() - s.startedAt) : 0;
   const mm = Math.floor(elapsed / 60000);
   const ss = Math.floor((elapsed % 60000) / 1000);
 
@@ -239,13 +249,22 @@ function renderSession() {
       ? `Ostatnio (${fmtDate(last.date).full}): ` + last.sets.map(x => (x.reps || '?') + '×' + (x.kg || '?') + 'kg').join(', ')
       : 'Brak wcześniejszych wyników';
 
-    const rows = e.sets.map((target, i) => `
+    const rows = e.sets.map((target, i) => {
+      const lastKg = last && last.sets[i] && last.sets[i].kg !== '' ? last.sets[i].kg : null;
+      return `
       <tr>
         <td>${i + 1}</td>
-        <td><input class="num-input" type="number" inputmode="numeric" placeholder="${target}" value="${entry[i] && entry[i].reps !== '' ? entry[i].reps : ''}" onchange="updateSetField('${e.id}',${i},'reps',this.value)"></td>
-        <td><input class="num-input" type="number" inputmode="decimal" step="0.5" placeholder="kg" value="${entry[i] && entry[i].kg !== '' ? entry[i].kg : ''}" onchange="updateSetField('${e.id}',${i},'kg',this.value)"></td>
+        <td>
+          <div class="set-suggest">${target}</div>
+          <input class="num-input" type="number" inputmode="numeric" placeholder="wpisz" value="${entry[i] && entry[i].reps !== '' ? entry[i].reps : ''}" onchange="updateSetField('${e.id}',${i},'reps',this.value)">
+        </td>
+        <td>
+          <div class="set-suggest">${lastKg != null ? esc(lastKg) + ' kg' : '—'}</div>
+          <input class="num-input" type="number" inputmode="decimal" step="0.5" placeholder="kg" value="${entry[i] && entry[i].kg !== '' ? entry[i].kg : ''}" onchange="updateSetField('${e.id}',${i},'kg',this.value)">
+        </td>
       </tr>
-    `).join('');
+    `;
+    }).join('');
 
     return `
       <div class="card exercise-card">
@@ -256,7 +275,7 @@ function renderSession() {
         </div>
         <div class="last-time">${esc(lastText)}</div>
         <table class="sets-table">
-          <tr><th>#</th><th>Powt.</th><th>Kg</th></tr>
+          <tr><th>#</th><th>Powt. cel / wykonano</th><th>Kg poprz. / dziś</th></tr>
           ${rows}
         </table>
       </div>
@@ -264,8 +283,9 @@ function renderSession() {
   }).join('');
 
   return `
+    ${!s.started ? `<button class="btn" style="margin-bottom:14px;" onclick="beginWorkoutTimer()">▶ Zacznij trening</button>` : ''}
     <div class="session-stats">
-      <div class="stat-box"><div class="v" id="session-timer">${String(mm).padStart(2,'0')}:${String(ss).padStart(2,'0')}</div><div class="l">Czas</div></div>
+      <div class="stat-box"><div class="v" id="session-timer">${String(mm).padStart(2,'0')}:${String(ss).padStart(2,'0')}</div><div class="l">${s.started ? 'Czas' : 'Czas (nie wystartował)'}</div></div>
       <div class="stat-box"><div class="v">${plan.exercises.filter(e => (s.entries[e.id]||[]).every(x=>x.done)).length}/${plan.exercises.length}</div><div class="l">Ćwiczenia</div></div>
     </div>
 
@@ -288,7 +308,7 @@ function renderSession() {
 }
 
 function startTimerIfNeeded() {
-  if (VIEW.screen !== 'session' || !DATA.activeSession) return;
+  if (VIEW.screen !== 'session' || !DATA.activeSession || !DATA.activeSession.started) return;
   timerInterval = setInterval(() => {
     const el = document.getElementById('session-timer');
     if (!el || !DATA.activeSession) { clearInterval(timerInterval); return; }
@@ -339,7 +359,7 @@ function cancelSession() {
 function finishSession() {
   const s = DATA.activeSession;
   const plan = findPlan(s.planId);
-  const durationMin = Math.max(1, Math.round((Date.now() - s.startedAt) / 60000));
+  const durationMin = s.started ? Math.max(1, Math.round((Date.now() - s.startedAt) / 60000)) : 0;
   const record = {
     id: uid('sess'),
     planId: s.planId,
