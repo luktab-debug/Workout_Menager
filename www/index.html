@@ -8,15 +8,17 @@
   <div id="topbar">
     <button id="back-btn" class="back-btn" style="visibility:hidden;">‹</button>
     <h1 id="topbar-title">Trening</h1>
+    <button id="lang-btn" class="lang-btn" onclick="toggleLang()">EN</button>
   </div>
   <div id="screen"></div>
   <div id="navbar">
-    <button data-tab="home"><span class="ic">🏋️</span>Trening</button>
-    <button data-tab="history"><span class="ic">📅</span>Historia</button>
-    <button data-tab="edit"><span class="ic">✎</span>Edycja</button>
+    <button data-tab="home"><span class="ic">🏋️</span><span data-nav="home">Trening</span></button>
+    <button data-tab="history"><span class="ic">📅</span><span data-nav="history">Historia</span></button>
+    <button data-tab="edit"><span class="ic">✎</span><span data-nav="edit">Edycja</span></button>
   </div>
 </div>
 
+<script src="i18n.js"></script>
 <script src="data.js"></script>
 <script src="storage.js"></script>
 <script src="app.js"></script>

@@ -59,6 +59,18 @@ html, body {
   cursor: pointer;
 }
 
+.lang-btn {
+  background: var(--card-2);
+  border: 1px solid var(--border);
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 700;
+  padding: 6px 10px;
+  border-radius: 999px;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
 #screen {
   flex: 1;
   overflow-y: auto;

@@ -15,7 +15,8 @@ function defaultData() {
   return {
     plans: DEFAULT_PLANS.map(deepClone),
     sessions: [],
-    activeSession: null
+    activeSession: null,
+    lang: 'pl'
   };
 }
 
@@ -27,6 +28,7 @@ function loadData() {
       if (parsed && Array.isArray(parsed.plans)) {
         if (!Array.isArray(parsed.sessions)) parsed.sessions = [];
         if (parsed.activeSession === undefined) parsed.activeSession = null;
+        if (parsed.lang !== 'pl' && parsed.lang !== 'en') parsed.lang = 'pl';
         return parsed;
       }
     }

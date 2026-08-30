@@ -18,10 +18,32 @@ function esc(s) {
   }[c]));
 }
 
+// ---------- Tłumaczenia (PL / EN) ----------
+function t(key, vars) {
+  const lang = (DATA && DATA.lang) || 'pl';
+  let text = (STRINGS[lang] && STRINGS[lang][key]) || STRINGS.pl[key] || key;
+  if (vars) {
+    Object.keys(vars).forEach(k => { text = text.replace('{' + k + '}', vars[k]); });
+  }
+  return text;
+}
+
+function groupLabel(code) {
+  const lang = (DATA && DATA.lang) || 'pl';
+  return (GROUP_LABELS[lang] && GROUP_LABELS[lang][code]) || code;
+}
+
+function toggleLang() {
+  DATA.lang = DATA.lang === 'en' ? 'pl' : 'en';
+  saveData(DATA);
+  render();
+}
+
 function fmtDate(iso) {
   const d = new Date(iso);
-  const months = ['sty','lut','mar','kwi','maj','cze','lip','sie','wrz','paź','lis','gru'];
-  return { day: d.getDate(), month: months[d.getMonth()], full: d.toLocaleDateString('pl-PL') };
+  const lang = (DATA && DATA.lang) || 'pl';
+  const months = MONTHS[lang] || MONTHS.pl;
+  return { day: d.getDate(), month: months[d.getMonth()], full: d.toLocaleDateString(lang === 'en' ? 'en-GB' : 'pl-PL') };
 }
 
 function findPlan(planId) {
@@ -70,8 +92,8 @@ function confirmDialog(message, onYes) {
   openModal(`
     <h3>${esc(message)}</h3>
     <div class="row" style="margin-top:14px;">
-      <button class="btn secondary" onclick="closeModal()">Anuluj</button>
-      <button class="btn danger" id="confirm-yes-btn">Tak, usuń</button>
+      <button class="btn secondary" onclick="closeModal()">${t('confirm_cancel')}</button>
+      <button class="btn danger" id="confirm-yes-btn">${t('confirm_yes_delete')}</button>
     </div>
   `);
   document.getElementById('confirm-yes-btn').addEventListener('click', () => { closeModal(); onYes(); });
@@ -90,19 +112,24 @@ function render() {
   if (timerInterval) { clearInterval(timerInterval); timerInterval = null; }
 
   navButtons.forEach(b => b.classList.toggle('active', b.dataset.tab === tabForScreen(VIEW.screen)));
+  document.querySelector('[data-nav="home"]').textContent = t('nav_trening');
+  document.querySelector('[data-nav="history"]').textContent = t('nav_historia');
+  document.querySelector('[data-nav="edit"]').textContent = t('nav_edycja');
+  const langBtn = document.getElementById('lang-btn');
+  if (langBtn) langBtn.textContent = DATA.lang === 'en' ? 'PL' : 'EN';
 
-  let title = 'Trening';
+  let title = t('title_trening');
   let showBack = false;
 
   switch (VIEW.screen) {
-    case 'home': title = 'Trening'; screenEl.innerHTML = renderHome(); break;
+    case 'home': title = t('title_trening'); screenEl.innerHTML = renderHome(); break;
     case 'session': title = sessionTitle(); showBack = true; screenEl.innerHTML = renderSession(); startTimerIfNeeded(); break;
-    case 'history': title = 'Historia'; screenEl.innerHTML = renderHistory(); break;
-    case 'historyDetail': title = 'Podsumowanie'; showBack = true; screenEl.innerHTML = renderHistoryDetail(); break;
-    case 'progressPick': title = 'Postępy'; showBack = true; screenEl.innerHTML = renderProgressPick(); break;
-    case 'progressExercise': title = 'Postępy'; showBack = true; screenEl.innerHTML = renderProgressExercise(); break;
-    case 'edit': title = 'Edycja planu'; screenEl.innerHTML = renderEditList(); break;
-    case 'editDay': title = 'Edycja dnia'; showBack = true; screenEl.innerHTML = renderEditDay(); break;
+    case 'history': title = t('title_historia'); screenEl.innerHTML = renderHistory(); break;
+    case 'historyDetail': title = t('title_podsumowanie'); showBack = true; screenEl.innerHTML = renderHistoryDetail(); break;
+    case 'progressPick': title = t('title_postepy'); showBack = true; screenEl.innerHTML = renderProgressPick(); break;
+    case 'progressExercise': title = t('title_postepy'); showBack = true; screenEl.innerHTML = renderProgressExercise(); break;
+    case 'edit': title = t('title_edycja'); screenEl.innerHTML = renderEditList(); break;
+    case 'editDay': title = t('title_edycja_dnia'); showBack = true; screenEl.innerHTML = renderEditDay(); break;
     default: screenEl.innerHTML = '';
   }
 
@@ -143,9 +170,9 @@ function renderHome() {
     const plan = findPlan(DATA.activeSession.planId);
     return `
       <div class="card" style="border-color:var(--accent);">
-        <div style="font-weight:700;margin-bottom:6px;">Masz trening w trakcie</div>
-        <div class="section-note" style="margin:0 0 10px;">Plan ${esc(plan ? plan.name : '?')} — wróć do niego albo zacznij od nowa.</div>
-        <button class="btn" onclick="setView('session')">Wróć do treningu</button>
+        <div style="font-weight:700;margin-bottom:6px;">${t('home_active_title')}</div>
+        <div class="section-note" style="margin:0 0 10px;">${esc(t('home_active_sub', { name: plan ? plan.name : '?' }))}</div>
+        <button class="btn" onclick="setView('session')">${t('home_active_btn')}</button>
       </div>`;
   }
 
@@ -153,16 +180,16 @@ function renderHome() {
     <div class="card plan-card" onclick="confirmStart('${p.id}')">
       <div class="plan-badge">${esc(p.name)}</div>
       <div class="meta">
-        <div class="name">Plan ${esc(p.name)}</div>
-        <div class="sub">${p.subtitle ? esc(p.subtitle) + ' • ' : ''}${p.exercises.length} ćwiczeń</div>
+        <div class="name">${t('plan_prefix')} ${esc(p.name)}</div>
+        <div class="sub">${p.subtitle ? esc(p.subtitle) + ' • ' : ''}${t('plan_ex_count', { n: p.exercises.length })}</div>
       </div>
       <div class="chev">›</div>
     </div>
   `).join('');
 
   return `
-    <h2>Wybierz dzień treningowy</h2>
-    ${cards || '<div class="empty-state">Brak planów. Dodaj dzień w zakładce Edycja.</div>'}
+    <h2>${t('home_choose_day')}</h2>
+    ${cards || `<div class="empty-state">${t('home_no_plans')}</div>`}
   `;
 }
 
@@ -206,7 +233,7 @@ function beginWorkoutTimer() {
 
 function sessionTitle() {
   const plan = findPlan(DATA.activeSession ? DATA.activeSession.planId : null);
-  return plan ? 'Trening ' + plan.name : 'Trening';
+  return plan ? t('title_trening_session', { name: plan.name }) : t('title_trening');
 }
 
 function getLastCompletedEntry(exId, beforeDate) {
@@ -225,9 +252,9 @@ function getLastCompletedEntry(exId, beforeDate) {
 
 function renderSession() {
   const s = DATA.activeSession;
-  if (!s) return '<div class="empty-state">Brak aktywnego treningu.</div>';
+  if (!s) return `<div class="empty-state">${t('no_active_session')}</div>`;
   const plan = findPlan(s.planId);
-  if (!plan) return '<div class="empty-state">Nie znaleziono planu.</div>';
+  if (!plan) return `<div class="empty-state">${t('no_plan_found')}</div>`;
 
   const elapsed = s.started ? Math.max(0, Date.now() - s.startedAt) : 0;
   const mm = Math.floor(elapsed / 60000);
@@ -246,8 +273,8 @@ function renderSession() {
     const allDone = entry.length > 0 && entry.every(x => x.done);
     const last = getLastCompletedEntry(e.id, s.date);
     const lastText = last
-      ? `Ostatnio (${fmtDate(last.date).full}): ` + last.sets.map(x => (x.reps || '?') + '×' + (x.kg || '?') + 'kg').join(', ')
-      : 'Brak wcześniejszych wyników';
+      ? t('last_time_prefix', { date: fmtDate(last.date).full }) + last.sets.map(x => (x.reps || '?') + '×' + (x.kg || '?') + 'kg').join(', ')
+      : t('last_time_none');
 
     const rows = e.sets.map((target, i) => {
       const lastKg = last && last.sets[i] && last.sets[i].kg !== '' ? last.sets[i].kg : null;
@@ -256,11 +283,11 @@ function renderSession() {
         <td>${i + 1}</td>
         <td>
           <div class="set-suggest">${target}</div>
-          <input class="num-input" type="number" inputmode="numeric" placeholder="wpisz" value="${entry[i] && entry[i].reps !== '' ? entry[i].reps : ''}" onchange="updateSetField('${e.id}',${i},'reps',this.value)">
+          <input class="num-input" type="number" inputmode="numeric" placeholder="${esc(t('input_reps_placeholder'))}" value="${entry[i] && entry[i].reps !== '' ? entry[i].reps : ''}" onchange="updateSetField('${e.id}',${i},'reps',this.value)">
         </td>
         <td>
           <div class="set-suggest">${lastKg != null ? esc(lastKg) + ' kg' : '—'}</div>
-          <input class="num-input" type="number" inputmode="decimal" step="0.5" placeholder="kg" value="${entry[i] && entry[i].kg !== '' ? entry[i].kg : ''}" onchange="updateSetField('${e.id}',${i},'kg',this.value)">
+          <input class="num-input" type="number" inputmode="decimal" step="0.5" placeholder="${esc(t('input_kg_placeholder'))}" value="${entry[i] && entry[i].kg !== '' ? entry[i].kg : ''}" onchange="updateSetField('${e.id}',${i},'kg',this.value)">
         </td>
       </tr>
     `;
@@ -269,13 +296,13 @@ function renderSession() {
     return `
       <div class="card exercise-card">
         <div class="exercise-head">
-          <span class="group-tag" style="background:${e.color}">${esc(e.group)}</span>
+          <span class="group-tag" style="background:${e.color}">${esc(groupLabel(e.group))}</span>
           <div class="ex-name">${esc(e.name)}</div>
           <div class="ex-check ${allDone ? 'done' : ''}" onclick="toggleExerciseDone('${e.id}')">${allDone ? '✓' : ''}</div>
         </div>
         <div class="last-time">${esc(lastText)}</div>
         <table class="sets-table">
-          <tr><th>#</th><th>Powt. cel / wykonano</th><th>Kg poprz. / dziś</th></tr>
+          <tr><th>#</th><th>${t('table_reps')}</th><th>${t('table_kg')}</th></tr>
           ${rows}
         </table>
       </div>
@@ -283,27 +310,27 @@ function renderSession() {
   }).join('');
 
   return `
-    ${!s.started ? `<button class="btn" style="margin-bottom:14px;" onclick="beginWorkoutTimer()">▶ Zacznij trening</button>` : ''}
+    ${!s.started ? `<button class="btn" style="margin-bottom:14px;" onclick="beginWorkoutTimer()">${t('session_start_btn')}</button>` : ''}
     <div class="session-stats">
-      <div class="stat-box"><div class="v" id="session-timer">${String(mm).padStart(2,'0')}:${String(ss).padStart(2,'0')}</div><div class="l">${s.started ? 'Czas' : 'Czas (nie wystartował)'}</div></div>
-      <div class="stat-box"><div class="v">${plan.exercises.filter(e => (s.entries[e.id]||[]).every(x=>x.done)).length}/${plan.exercises.length}</div><div class="l">Ćwiczenia</div></div>
+      <div class="stat-box"><div class="v" id="session-timer">${String(mm).padStart(2,'0')}:${String(ss).padStart(2,'0')}</div><div class="l">${s.started ? t('stat_time') : t('stat_time_not_started')}</div></div>
+      <div class="stat-box"><div class="v">${plan.exercises.filter(e => (s.entries[e.id]||[]).every(x=>x.done)).length}/${plan.exercises.length}</div><div class="l">${t('stat_exercises')}</div></div>
     </div>
 
-    <h2>Rozgrzewka <span style="color:var(--text-dim);font-weight:400;font-size:12px;">(przerwy ${esc(plan.warmupRest || '')})</span></h2>
+    <h2>${t('warmup_header')} <span style="color:var(--text-dim);font-weight:400;font-size:12px;">(${esc(t('rest_label', { x: plan.warmupRest || '' }))})</span></h2>
     <div class="card" style="padding:4px 12px;">${warmupHtml}</div>
 
-    <h2>Ćwiczenia <span style="color:var(--text-dim);font-weight:400;font-size:12px;">(przerwy ${esc(plan.restBetweenSets || '')})</span></h2>
+    <h2>${t('exercises_header')} <span style="color:var(--text-dim);font-weight:400;font-size:12px;">(${esc(t('rest_label', { x: plan.restBetweenSets || '' }))})</span></h2>
     ${exercisesHtml}
 
-    <h2>Notatki</h2>
+    <h2>${t('notes_header')}</h2>
     <div class="card">
-      <textarea placeholder="Jak poszło, samopoczucie, uwagi..." onchange="updateSessionField('notes', this.value)">${esc(s.notes)}</textarea>
-      <label class="field-label">Spalone kcal</label>
-      <input type="number" inputmode="numeric" placeholder="np. 350" value="${esc(s.kcal)}" onchange="updateSessionField('kcal', this.value)">
+      <textarea placeholder="${esc(t('notes_placeholder'))}" onchange="updateSessionField('notes', this.value)">${esc(s.notes)}</textarea>
+      <label class="field-label">${t('kcal_label')}</label>
+      <input type="number" inputmode="numeric" placeholder="${esc(t('kcal_placeholder'))}" value="${esc(s.kcal)}" onchange="updateSessionField('kcal', this.value)">
     </div>
 
-    <button class="btn" style="margin-top:6px;" onclick="finishSession()">Zakończ trening</button>
-    <button class="btn ghost" style="margin-top:10px;" onclick="cancelSession()">Anuluj trening (bez zapisu)</button>
+    <button class="btn" style="margin-top:6px;" onclick="finishSession()">${t('finish_btn')}</button>
+    <button class="btn ghost" style="margin-top:10px;" onclick="cancelSession()">${t('cancel_session_btn')}</button>
   `;
 }
 
@@ -349,7 +376,7 @@ function updateSessionField(field, value) {
 }
 
 function cancelSession() {
-  confirmDialog('Anulować trening bez zapisywania?', () => {
+  confirmDialog(t('cancel_session_confirm'), () => {
     DATA.activeSession = null;
     saveData(DATA);
     setView('home');
@@ -374,7 +401,7 @@ function finishSession() {
   DATA.sessions.push(record);
   DATA.activeSession = null;
   saveData(DATA);
-  toast('Trening zapisany 💪');
+  toast(t('session_saved_toast'));
   setView('historyDetail', { sessionId: record.id });
 }
 
@@ -390,8 +417,8 @@ function renderHistory() {
       <div class="card history-item" onclick="setView('historyDetail',{sessionId:'${s.id}'})">
         <div class="date-badge"><div class="d">${d.day}</div><div class="m">${d.month}</div></div>
         <div class="meta">
-          <div class="name">Trening ${esc(s.planName)}</div>
-          <div class="sub">${s.durationMin} min${s.kcal ? ' • ' + esc(s.kcal) + ' kcal' : ''}</div>
+          <div class="name">${t('title_trening_session', { name: esc(s.planName) })}</div>
+          <div class="sub">${s.durationMin} ${t('history_min')}${s.kcal ? ' • ' + esc(s.kcal) + ' kcal' : ''}</div>
         </div>
         <div class="chev">›</div>
       </div>
@@ -399,15 +426,15 @@ function renderHistory() {
   }).join('');
 
   return `
-    <button class="btn secondary" onclick="setView('progressPick')">📈 Postępy w ćwiczeniach</button>
-    <h2 style="margin-top:18px;">Zapisane treningi</h2>
-    ${list || '<div class="empty-state">Nie masz jeszcze żadnych zapisanych treningów.</div>'}
+    <button class="btn secondary" onclick="setView('progressPick')">${t('history_progress_btn')}</button>
+    <h2 style="margin-top:18px;">${t('history_saved_header')}</h2>
+    ${list || `<div class="empty-state">${t('history_empty')}</div>`}
   `;
 }
 
 function renderHistoryDetail() {
   const s = DATA.sessions.find(x => x.id === VIEW.sessionId);
-  if (!s) return '<div class="empty-state">Nie znaleziono treningu.</div>';
+  if (!s) return `<div class="empty-state">${t('no_session_found')}</div>`;
   const plan = findPlan(s.planId);
   const d = fmtDate(s.date);
 
@@ -420,11 +447,11 @@ function renderHistoryDetail() {
     return `
       <div class="card exercise-card">
         <div class="exercise-head">
-          <span class="group-tag" style="background:${e.color}">${esc(e.group)}</span>
+          <span class="group-tag" style="background:${e.color}">${esc(groupLabel(e.group))}</span>
           <div class="ex-name">${esc(e.name)}</div>
         </div>
         <table class="sets-table">
-          <tr><th>#</th><th>Powt.</th><th>Kg</th></tr>
+          <tr><th>#</th><th>${t('table_reps_short')}</th><th>Kg</th></tr>
           ${rows}
         </table>
       </div>
@@ -433,19 +460,19 @@ function renderHistoryDetail() {
 
   return `
     <div class="session-stats">
-      <div class="stat-box"><div class="v">${d.full}</div><div class="l">Data</div></div>
-      <div class="stat-box"><div class="v">${s.durationMin} min</div><div class="l">Czas trwania</div></div>
-      <div class="stat-box"><div class="v">${esc(s.kcal || '—')}</div><div class="l">Kcal</div></div>
+      <div class="stat-box"><div class="v">${d.full}</div><div class="l">${t('detail_data')}</div></div>
+      <div class="stat-box"><div class="v">${s.durationMin} ${t('history_min')}</div><div class="l">${t('detail_duration')}</div></div>
+      <div class="stat-box"><div class="v">${esc(s.kcal || '—')}</div><div class="l">${t('detail_kcal')}</div></div>
     </div>
-    <h2>Trening ${esc(s.planName)}</h2>
+    <h2>${t('title_trening_session', { name: esc(s.planName) })}</h2>
     ${exercisesHtml}
-    ${s.notes ? `<h2>Notatki</h2><div class="card">${esc(s.notes)}</div>` : ''}
-    <button class="btn danger" style="margin-top:10px;" onclick="deleteSession('${s.id}')">Usuń ten wpis</button>
+    ${s.notes ? `<h2>${t('notes_header')}</h2><div class="card">${esc(s.notes)}</div>` : ''}
+    <button class="btn danger" style="margin-top:10px;" onclick="deleteSession('${s.id}')">${t('detail_delete_btn')}</button>
   `;
 }
 
 function deleteSession(id) {
-  confirmDialog('Usunąć ten zapisany trening?', () => {
+  confirmDialog(t('detail_delete_confirm'), () => {
     DATA.sessions = DATA.sessions.filter(s => s.id !== id);
     saveData(DATA);
     setView('history');
@@ -458,19 +485,19 @@ function renderProgressPick() {
   const groups = DATA.plans.map(plan => {
     const items = plan.exercises.map(e => `
       <div class="day-edit-row" style="cursor:pointer;" onclick="setView('progressExercise',{planId:'${plan.id}',exId:'${e.id}'})">
-        <span class="group-tag" style="background:${e.color}">${esc(e.group)}</span>
+        <span class="group-tag" style="background:${e.color}">${esc(groupLabel(e.group))}</span>
         <div class="info"><div class="n">${esc(e.name)}</div></div>
         <div class="chev">›</div>
       </div>
     `).join('');
-    return `<h2>Plan ${esc(plan.name)}</h2><div class="card" style="padding:4px 12px;">${items}</div>`;
+    return `<h2>${t('plan_prefix')} ${esc(plan.name)}</h2><div class="card" style="padding:4px 12px;">${items}</div>`;
   }).join('');
-  return groups || '<div class="empty-state">Brak ćwiczeń w planach.</div>';
+  return groups || `<div class="empty-state">${t('progress_no_exercises')}</div>`;
 }
 
 function renderProgressExercise() {
   const e = findExercise(VIEW.planId, VIEW.exId);
-  if (!e) return '<div class="empty-state">Nie znaleziono ćwiczenia.</div>';
+  if (!e) return `<div class="empty-state">${t('no_exercise_found')}</div>`;
 
   const points = DATA.sessions
     .filter(s => s.entries && s.entries[e.id])
@@ -512,11 +539,11 @@ function renderProgressExercise() {
   return `
     <h2>${esc(e.name)}</h2>
     <div class="card">
-      <span class="group-tag" style="background:${e.color}">${esc(e.group)}</span>
-      ${sparkline || '<div class="section-note">Potrzeba co najmniej 2 zapisanych treningów z wagą, żeby pokazać wykres.</div>'}
+      <span class="group-tag" style="background:${e.color}">${esc(groupLabel(e.group))}</span>
+      ${sparkline || `<div class="section-note">${t('progress_need_two')}</div>`}
       <table class="progress-table">
-        <tr><th>Data</th><th>Kg (serie)</th></tr>
-        ${rowsHtml || '<tr><td colspan="2" style="color:var(--text-dim);padding:14px;">Brak historii</td></tr>'}
+        <tr><th>${t('progress_table_date')}</th><th>${t('progress_table_kg')}</th></tr>
+        ${rowsHtml || `<tr><td colspan="2" style="color:var(--text-dim);padding:14px;">${t('progress_no_history')}</td></tr>`}
       </table>
     </div>
   `;
@@ -530,29 +557,29 @@ function renderEditList() {
   const rows = DATA.plans.map((p, idx) => `
     <div class="day-edit-row">
       <div class="info" style="cursor:pointer;" onclick="setView('editDay',{planId:'${p.id}'})">
-        <div class="n">Plan ${esc(p.name)}</div>
-        <div class="section-note" style="margin:2px 0 0;">${p.exercises.length} ćwiczeń${p.subtitle ? ' • ' + esc(p.subtitle) : ''}</div>
+        <div class="n">${t('plan_prefix')} ${esc(p.name)}</div>
+        <div class="section-note" style="margin:2px 0 0;">${t('plan_ex_count', { n: p.exercises.length })}${p.subtitle ? ' • ' + esc(p.subtitle) : ''}</div>
       </div>
       <div class="actions">
-        <button class="icon-btn" title="Duplikuj" onclick="duplicateDay('${p.id}')">⧉</button>
-        <button class="icon-btn" title="Przesuń w górę" ${idx===0?'disabled':''} onclick="moveDay('${p.id}',-1)">↑</button>
-        <button class="icon-btn" title="Przesuń w dół" ${idx===DATA.plans.length-1?'disabled':''} onclick="moveDay('${p.id}',1)">↓</button>
-        <button class="icon-btn danger" title="Usuń" onclick="deleteDay('${p.id}')">✕</button>
+        <button class="icon-btn" title="${esc(t('tt_duplicate'))}" onclick="duplicateDay('${p.id}')">⧉</button>
+        <button class="icon-btn" title="${esc(t('tt_move_up'))}" ${idx===0?'disabled':''} onclick="moveDay('${p.id}',-1)">↑</button>
+        <button class="icon-btn" title="${esc(t('tt_move_down'))}" ${idx===DATA.plans.length-1?'disabled':''} onclick="moveDay('${p.id}',1)">↓</button>
+        <button class="icon-btn danger" title="${esc(t('tt_delete'))}" onclick="deleteDay('${p.id}')">✕</button>
       </div>
     </div>
   `).join('');
 
   return `
-    <h2>Dni treningowe</h2>
-    <div class="card" style="padding:4px 12px;">${rows || '<div class="empty-state">Brak dni.</div>'}</div>
-    <div class="fab-add" onclick="addDay()">＋ Dodaj dzień treningowy</div>
+    <h2>${t('edit_days_header')}</h2>
+    <div class="card" style="padding:4px 12px;">${rows || `<div class="empty-state">${t('edit_no_days')}</div>`}</div>
+    <div class="fab-add" onclick="addDay()">${t('edit_add_day')}</div>
 
-    <h2>Kopia zapasowa</h2>
+    <h2>${t('edit_backup_header')}</h2>
     <div class="row">
-      <button class="btn secondary" onclick="showExport()">Eksportuj dane</button>
-      <button class="btn secondary" onclick="showImport()">Importuj dane</button>
+      <button class="btn secondary" onclick="showExport()">${t('edit_export_btn')}</button>
+      <button class="btn secondary" onclick="showImport()">${t('edit_import_btn')}</button>
     </div>
-    <div class="section-note">Wszystkie dane (plany, historia) trzymane są tylko na tym urządzeniu. Eksport przyda się jako kopia zapasowa przed zmianą telefonu.</div>
+    <div class="section-note">${t('edit_backup_note')}</div>
   `;
 }
 
@@ -571,13 +598,13 @@ function duplicateDay(planId) {
   if (!p) return;
   const copy = deepClone(p);
   copy.id = uid('day');
-  copy.name = p.name + ' (kopia)';
+  copy.name = p.name + t('day_copy_suffix');
   copy.exercises.forEach(e => e.id = uid('ex'));
   const idx = DATA.plans.findIndex(x => x.id === planId);
   DATA.plans.splice(idx + 1, 0, copy);
   saveData(DATA);
   render();
-  toast('Zduplikowano dzień');
+  toast(t('day_duplicated_toast'));
 }
 
 function moveDay(planId, dir) {
@@ -591,7 +618,7 @@ function moveDay(planId, dir) {
 }
 
 function deleteDay(planId) {
-  confirmDialog('Usunąć ten dzień treningowy razem z jego ćwiczeniami?', () => {
+  confirmDialog(t('edit_delete_day_confirm'), () => {
     DATA.plans = DATA.plans.filter(p => p.id !== planId);
     saveData(DATA);
     render();
@@ -602,7 +629,7 @@ function deleteDay(planId) {
 
 function renderEditDay() {
   const p = findPlan(VIEW.planId);
-  if (!p) return '<div class="empty-state">Nie znaleziono dnia.</div>';
+  if (!p) return `<div class="empty-state">${t('no_day_found')}</div>`;
 
   const warmupRows = p.warmup.map((w, i) => `
     <div class="day-edit-row">
@@ -616,10 +643,10 @@ function renderEditDay() {
 
   const exRows = p.exercises.map((e, idx) => `
     <div class="day-edit-row">
-      <span class="group-tag" style="background:${e.color}">${esc(e.group)}</span>
+      <span class="group-tag" style="background:${e.color}">${esc(groupLabel(e.group))}</span>
       <div class="info">
         <div class="n">${esc(e.name)}</div>
-        <div class="section-note" style="margin:2px 0 0;">${e.sets.length} serie × ${e.sets.join('/')} powt.</div>
+        <div class="section-note" style="margin:2px 0 0;">${esc(t('day_sets_summary', { n: e.sets.length, sets: e.sets.join('/') }))}</div>
       </div>
       <div class="actions">
         <button class="icon-btn" ${idx===0?'disabled':''} onclick="moveExercise('${p.id}','${e.id}',-1)">↑</button>
@@ -631,23 +658,23 @@ function renderEditDay() {
   `).join('');
 
   return `
-    <h2>Nazwa dnia</h2>
+    <h2>${t('day_name_header')}</h2>
     <div class="card">
-      <label class="field-label">Nazwa (np. A, Nogi, Push...)</label>
+      <label class="field-label">${t('day_name_label')}</label>
       <input type="text" value="${esc(p.name)}" onchange="updateDayField('${p.id}','name',this.value)">
-      <label class="field-label">Podtytuł (opcjonalnie)</label>
-      <input type="text" value="${esc(p.subtitle)}" placeholder="np. alternatywa w domu" onchange="updateDayField('${p.id}','subtitle',this.value)">
-      <label class="field-label">Przerwa między seriami</label>
+      <label class="field-label">${t('day_subtitle_label')}</label>
+      <input type="text" value="${esc(p.subtitle)}" placeholder="${esc(t('day_subtitle_placeholder'))}" onchange="updateDayField('${p.id}','subtitle',this.value)">
+      <label class="field-label">${t('day_rest_label')}</label>
       <input type="text" value="${esc(p.restBetweenSets)}" onchange="updateDayField('${p.id}','restBetweenSets',this.value)">
     </div>
 
-    <h2>Rozgrzewka</h2>
-    <div class="card" style="padding:4px 12px;">${warmupRows || '<div class="empty-state">Brak</div>'}</div>
-    <div class="fab-add" onclick="editWarmupItem('${p.id}', -1)">＋ Dodaj element rozgrzewki</div>
+    <h2>${t('day_warmup_header')}</h2>
+    <div class="card" style="padding:4px 12px;">${warmupRows || `<div class="empty-state">${t('day_warmup_empty')}</div>`}</div>
+    <div class="fab-add" onclick="editWarmupItem('${p.id}', -1)">${t('day_add_warmup')}</div>
 
-    <h2>Ćwiczenia</h2>
-    <div class="card" style="padding:4px 12px;">${exRows || '<div class="empty-state">Brak ćwiczeń</div>'}</div>
-    <div class="fab-add" onclick="editExercise('${p.id}', null)">＋ Dodaj ćwiczenie</div>
+    <h2>${t('day_exercises_header')}</h2>
+    <div class="card" style="padding:4px 12px;">${exRows || `<div class="empty-state">${t('day_exercises_empty')}</div>`}</div>
+    <div class="fab-add" onclick="editExercise('${p.id}', null)">${t('day_add_exercise')}</div>
   `;
 }
 
@@ -662,17 +689,17 @@ function editWarmupItem(planId, index) {
   const isNew = index === -1;
   const item = isNew ? { name: '', target: '' } : p.warmup[index];
   openModal(`
-    <h3>${isNew ? 'Nowy element rozgrzewki' : 'Edytuj element rozgrzewki'}</h3>
-    <label class="field-label">Nazwa</label>
-    <input type="text" id="wu-name" value="${esc(item.name)}" placeholder="np. Kręcenie biodrami">
-    <label class="field-label">Cel (czas / powtórzenia)</label>
-    <input type="text" id="wu-target" value="${esc(item.target)}" placeholder="np. 1 x 25 albo 60s - 90s">
-    <button class="btn" style="margin-top:16px;" id="wu-save-btn">Zapisz</button>
+    <h3>${isNew ? t('warmup_new_title') : t('warmup_edit_title')}</h3>
+    <label class="field-label">${t('warmup_name_label')}</label>
+    <input type="text" id="wu-name" value="${esc(item.name)}" placeholder="${esc(t('warmup_name_placeholder'))}">
+    <label class="field-label">${t('warmup_target_label')}</label>
+    <input type="text" id="wu-target" value="${esc(item.target)}" placeholder="${esc(t('warmup_target_placeholder'))}">
+    <button class="btn" style="margin-top:16px;" id="wu-save-btn">${t('save_btn')}</button>
   `);
   document.getElementById('wu-save-btn').addEventListener('click', () => {
     const name = document.getElementById('wu-name').value.trim();
     const target = document.getElementById('wu-target').value.trim();
-    if (!name) { toast('Podaj nazwę'); return; }
+    if (!name) { toast(t('warmup_name_required')); return; }
     if (isNew) p.warmup.push({ name, target });
     else { p.warmup[index].name = name; p.warmup[index].target = target; }
     saveData(DATA);
@@ -700,7 +727,7 @@ function moveExercise(planId, exId, dir) {
 }
 
 function deleteExercise(planId, exId) {
-  confirmDialog('Usunąć to ćwiczenie z planu?', () => {
+  confirmDialog(t('day_delete_exercise_confirm'), () => {
     const p = findPlan(planId);
     p.exercises = p.exercises.filter(e => e.id !== exId);
     saveData(DATA);
@@ -716,20 +743,20 @@ function editExercise(planId, exId) {
     : p.exercises.find(x => x.id === exId);
 
   const groupOptions = Object.keys(GROUP_COLORS).map(g =>
-    `<option value="${g}" ${g === e.group ? 'selected' : ''}>${g}</option>`
+    `<option value="${g}" ${g === e.group ? 'selected' : ''}>${esc(groupLabel(g))}</option>`
   ).join('');
 
   openModal(`
-    <h3>${isNew ? 'Nowe ćwiczenie' : 'Edytuj ćwiczenie'}</h3>
-    <label class="field-label">Nazwa ćwiczenia</label>
-    <input type="text" id="ex-name" value="${esc(e.name)}" placeholder="np. Wyciskanie hantli na ławce">
-    <label class="field-label">Grupa mięśniowa</label>
+    <h3>${isNew ? t('ex_new_title') : t('ex_edit_title')}</h3>
+    <label class="field-label">${t('ex_name_label')}</label>
+    <input type="text" id="ex-name" value="${esc(e.name)}" placeholder="${esc(t('ex_name_placeholder'))}">
+    <label class="field-label">${t('ex_group_label')}</label>
     <select id="ex-group" style="width:100%;background:var(--card-2);color:var(--text);border:1px solid var(--border);border-radius:10px;padding:10px 12px;font-size:14px;">
       ${groupOptions}
     </select>
-    <label class="field-label">Serie i docelowe powtórzenia (oddziel przecinkami)</label>
-    <input type="text" id="ex-sets" value="${e.sets.join(',')}" placeholder="np. 12,12,12">
-    <button class="btn" style="margin-top:16px;" id="ex-save-btn">Zapisz</button>
+    <label class="field-label">${t('ex_sets_label')}</label>
+    <input type="text" id="ex-sets" value="${e.sets.join(',')}" placeholder="${esc(t('ex_sets_placeholder'))}">
+    <button class="btn" style="margin-top:16px;" id="ex-save-btn">${t('save_btn')}</button>
   `);
 
   document.getElementById('ex-save-btn').addEventListener('click', () => {
@@ -737,8 +764,8 @@ function editExercise(planId, exId) {
     const group = document.getElementById('ex-group').value;
     const setsRaw = document.getElementById('ex-sets').value;
     const sets = setsRaw.split(',').map(s => parseInt(s.trim(), 10)).filter(n => !isNaN(n) && n > 0);
-    if (!name) { toast('Podaj nazwę ćwiczenia'); return; }
-    if (!sets.length) { toast('Podaj przynajmniej jedną serię'); return; }
+    if (!name) { toast(t('ex_name_required')); return; }
+    if (!sets.length) { toast(t('ex_sets_required')); return; }
 
     if (isNew) {
       p.exercises.push({ id: e.id, group, color: GROUP_COLORS[group], name, sets });
@@ -756,33 +783,35 @@ function editExercise(planId, exId) {
 function showExport() {
   const json = JSON.stringify(DATA, null, 2);
   openModal(`
-    <h3>Eksport danych</h3>
-    <div class="section-note">Zaznacz cały tekst i skopiuj go w bezpieczne miejsce (np. notatki, e-mail do siebie).</div>
+    <h3>${t('export_title')}</h3>
+    <div class="section-note">${t('export_note')}</div>
     <textarea id="export-area" style="min-height:220px;font-size:11px;" readonly>${esc(json)}</textarea>
-    <button class="btn secondary" style="margin-top:10px;" onclick="document.getElementById('export-area').select();document.execCommand('copy');toast('Skopiowano')">Kopiuj</button>
+    <button class="btn secondary" style="margin-top:10px;" onclick="document.getElementById('export-area').select();document.execCommand('copy');toast('${esc(t('copied_toast'))}')">${t('copy_btn')}</button>
   `);
 }
 
 function showImport() {
   openModal(`
-    <h3>Import danych</h3>
-    <div class="section-note">Wklej wcześniej wyeksportowany tekst. To nadpisze obecne dane w appce.</div>
-    <textarea id="import-area" style="min-height:220px;font-size:11px;" placeholder="Wklej tutaj..."></textarea>
-    <button class="btn" style="margin-top:10px;" id="import-btn">Importuj i nadpisz</button>
+    <h3>${t('import_title')}</h3>
+    <div class="section-note">${t('import_note')}</div>
+    <textarea id="import-area" style="min-height:220px;font-size:11px;" placeholder="${esc(t('import_placeholder'))}"></textarea>
+    <button class="btn" style="margin-top:10px;" id="import-btn">${t('import_btn')}</button>
   `);
   document.getElementById('import-btn').addEventListener('click', () => {
     const raw = document.getElementById('import-area').value;
     try {
       const parsed = JSON.parse(raw);
       if (!parsed || !Array.isArray(parsed.plans)) throw new Error('bad shape');
+      const keepLang = DATA.lang;
       DATA = parsed;
       if (!Array.isArray(DATA.sessions)) DATA.sessions = [];
+      if (DATA.lang !== 'pl' && DATA.lang !== 'en') DATA.lang = keepLang || 'pl';
       saveData(DATA);
       closeModal();
       setView('home');
-      toast('Zaimportowano dane');
+      toast(t('import_success'));
     } catch (err) {
-      toast('Nieprawidłowy format danych');
+      toast(t('import_error'));
     }
   });
 }
