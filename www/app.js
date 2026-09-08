@@ -454,7 +454,7 @@ function renderSession() {
           ${rows}
         </table>
       </div>
-      ${idx === lastCompletedIdx ? exerciseTimerHtml : ''}
+      ${(warmupAllDone && idx === lastCompletedIdx) ? exerciseTimerHtml : ''}
     `;
   }).join('');
 
