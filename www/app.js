@@ -416,7 +416,7 @@ function renderSession() {
     onStop: 'stopExerciseRest'
   });
 
-  const exercisesHtml = plan.exercises.map((e, idx) => {
+  const exerciseCards = plan.exercises.map((e, idx) => {
     const entry = s.entries[e.id] || [];
     const allDone = entry.length > 0 && entry.every(x => x.done);
     const last = getLastCompletedEntry(e.id, s.date);
@@ -454,9 +454,21 @@ function renderSession() {
           ${rows}
         </table>
       </div>
-      ${(warmupAllDone && idx === lastCompletedIdx) ? exerciseTimerHtml : ''}
     `;
-  }).join('');
+  });
+
+  // Stoper między ćwiczeniami: widoczny dopiero po ukończeniu rozgrzewki.
+  // Na start stoi na górze listy ćwiczeń; po odhaczeniu ćwiczenia przeskakuje pod nie.
+  let exercisesHtml;
+  if (!warmupAllDone) {
+    exercisesHtml = exerciseCards.join('');
+  } else if (lastCompletedIdx === -1) {
+    exercisesHtml = exerciseTimerHtml + exerciseCards.join('');
+  } else {
+    const parts = exerciseCards.slice();
+    parts.splice(lastCompletedIdx + 1, 0, exerciseTimerHtml);
+    exercisesHtml = parts.join('');
+  }
 
   return `
     ${!s.started ? `<button class="btn" style="margin-bottom:14px;" onclick="beginWorkoutTimer()">${t('session_start_btn')}</button>` : ''}
