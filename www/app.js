@@ -216,10 +216,90 @@ function startSession(planId) {
     warmupDone: plan.warmup.map(() => false),
     entries,
     notes: '',
-    kcal: ''
+    kcal: '',
+    warmupTimer: { seconds: 60, endAt: null },
+    exerciseTimer: { seconds: 60, endAt: null }
   };
   saveData(DATA);
   setView('session');
+}
+
+// ---------- Stopery przerw (rozgrzewka / między ćwiczeniami) ----------
+
+function mmss(totalSeconds) {
+  const s = Math.max(0, Math.ceil(totalSeconds));
+  const m = Math.floor(s / 60);
+  const r = s % 60;
+  return m + ':' + String(r).padStart(2, '0');
+}
+
+function restOptionsHtml(selected) {
+  let html = '';
+  for (let sec = 15; sec <= 300; sec += 15) {
+    html += `<option value="${sec}" ${sec === selected ? 'selected' : ''}>${mmss(sec)}</option>`;
+  }
+  return html;
+}
+
+function isWarmupAllDone(s) {
+  return s.warmupDone.length > 0 && s.warmupDone.every(Boolean);
+}
+
+function renderRestTimer(opts) {
+  // opts: { id, timer, disabled, label, onSelect, onStart, onStop, disabledNote }
+  const running = !!opts.timer.endAt;
+  const remaining = running ? Math.max(0, Math.round((opts.timer.endAt - Date.now()) / 1000)) : opts.timer.seconds;
+  return `
+    <div class="card rest-timer-card ${opts.disabled ? 'disabled' : ''}">
+      <div class="rt-label">${esc(opts.label)}</div>
+      <div class="rt-row">
+        <select class="rt-select" ${opts.disabled || running ? 'disabled' : ''} onchange="${opts.onSelect}(this.value)">
+          ${restOptionsHtml(opts.timer.seconds)}
+        </select>
+        ${running
+          ? `<div class="rt-display" id="${opts.id}">${mmss(remaining)}</div><button class="btn small danger" onclick="${opts.onStop}()">${t('rest_stop_btn')}</button>`
+          : `<button class="btn small" ${opts.disabled ? 'disabled' : ''} onclick="${opts.onStart}()">${t('rest_start_btn')}</button>`}
+      </div>
+      ${opts.disabled && opts.disabledNote ? `<div class="section-note" style="margin:6px 0 0;">${esc(opts.disabledNote)}</div>` : ''}
+    </div>
+  `;
+}
+
+function setWarmupRestSeconds(val) {
+  DATA.activeSession.warmupTimer.seconds = parseInt(val, 10);
+  saveData(DATA);
+}
+
+function startWarmupRest() {
+  const s = DATA.activeSession;
+  if (isWarmupAllDone(s)) return;
+  s.warmupTimer.endAt = Date.now() + s.warmupTimer.seconds * 1000;
+  saveData(DATA);
+  render();
+}
+
+function stopWarmupRest() {
+  DATA.activeSession.warmupTimer.endAt = null;
+  saveData(DATA);
+  render();
+}
+
+function setExerciseRestSeconds(val) {
+  DATA.activeSession.exerciseTimer.seconds = parseInt(val, 10);
+  saveData(DATA);
+}
+
+function startExerciseRest() {
+  const s = DATA.activeSession;
+  s.exerciseTimer.endAt = Date.now() + s.exerciseTimer.seconds * 1000;
+  saveData(DATA);
+  render();
+}
+
+function stopExerciseRest() {
+  DATA.activeSession.exerciseTimer.endAt = null;
+  saveData(DATA);
+  render();
 }
 
 function beginWorkoutTimer() {
@@ -255,6 +335,8 @@ function renderSession() {
   if (!s) return `<div class="empty-state">${t('no_active_session')}</div>`;
   const plan = findPlan(s.planId);
   if (!plan) return `<div class="empty-state">${t('no_plan_found')}</div>`;
+  if (!s.warmupTimer) s.warmupTimer = { seconds: 60, endAt: null };
+  if (!s.exerciseTimer) s.exerciseTimer = { seconds: 60, endAt: null };
 
   const elapsed = s.started ? Math.max(0, Date.now() - s.startedAt) : 0;
   const mm = Math.floor(elapsed / 60000);
@@ -268,7 +350,34 @@ function renderSession() {
     </div>
   `).join('');
 
-  const exercisesHtml = plan.exercises.map(e => {
+  const warmupAllDone = isWarmupAllDone(s);
+  const warmupTimerHtml = renderRestTimer({
+    id: 'warmup-rest-display',
+    timer: s.warmupTimer,
+    disabled: warmupAllDone,
+    label: t('warmup_rest_label'),
+    onSelect: 'setWarmupRestSeconds',
+    onStart: 'startWarmupRest',
+    onStop: 'stopWarmupRest',
+    disabledNote: t('warmup_rest_disabled_note')
+  });
+
+  const doneFlags = plan.exercises.map(e => {
+    const en = s.entries[e.id] || [];
+    return en.length > 0 && en.every(x => x.done);
+  });
+  const lastCompletedIdx = doneFlags.lastIndexOf(true);
+  const exerciseTimerHtml = renderRestTimer({
+    id: 'exercise-rest-display',
+    timer: s.exerciseTimer,
+    disabled: false,
+    label: t('exercise_rest_label'),
+    onSelect: 'setExerciseRestSeconds',
+    onStart: 'startExerciseRest',
+    onStop: 'stopExerciseRest'
+  });
+
+  const exercisesHtml = plan.exercises.map((e, idx) => {
     const entry = s.entries[e.id] || [];
     const allDone = entry.length > 0 && entry.every(x => x.done);
     const last = getLastCompletedEntry(e.id, s.date);
@@ -306,6 +415,7 @@ function renderSession() {
           ${rows}
         </table>
       </div>
+      ${idx === lastCompletedIdx ? exerciseTimerHtml : ''}
     `;
   }).join('');
 
@@ -318,6 +428,7 @@ function renderSession() {
 
     <h2>${t('warmup_header')} <span style="color:var(--text-dim);font-weight:400;font-size:12px;">(${esc(t('rest_label', { x: plan.warmupRest || '' }))})</span></h2>
     <div class="card" style="padding:4px 12px;">${warmupHtml}</div>
+    ${warmupTimerHtml}
 
     <h2>${t('exercises_header')} <span style="color:var(--text-dim);font-weight:400;font-size:12px;">(${esc(t('rest_label', { x: plan.restBetweenSets || '' }))})</span></h2>
     ${exercisesHtml}
@@ -335,20 +446,46 @@ function renderSession() {
 }
 
 function startTimerIfNeeded() {
-  if (VIEW.screen !== 'session' || !DATA.activeSession || !DATA.activeSession.started) return;
+  if (VIEW.screen !== 'session' || !DATA.activeSession) return;
   timerInterval = setInterval(() => {
-    const el = document.getElementById('session-timer');
-    if (!el || !DATA.activeSession) { clearInterval(timerInterval); return; }
-    const elapsed = Math.max(0, Date.now() - DATA.activeSession.startedAt);
-    const mm = Math.floor(elapsed / 60000);
-    const ss = Math.floor((elapsed % 60000) / 1000);
-    el.textContent = String(mm).padStart(2,'0') + ':' + String(ss).padStart(2,'0');
+    const s = DATA.activeSession;
+    if (!s) { clearInterval(timerInterval); return; }
+
+    if (s.started) {
+      const el = document.getElementById('session-timer');
+      if (el) {
+        const elapsed = Math.max(0, Date.now() - s.startedAt);
+        const mm = Math.floor(elapsed / 60000);
+        const ss = Math.floor((elapsed % 60000) / 1000);
+        el.textContent = String(mm).padStart(2,'0') + ':' + String(ss).padStart(2,'0');
+      }
+    }
+
+    tickRestTimer(s.warmupTimer, 'warmup-rest-display');
+    tickRestTimer(s.exerciseTimer, 'exercise-rest-display');
   }, 1000);
+}
+
+function tickRestTimer(timer, elId) {
+  if (!timer || !timer.endAt) return;
+  const remaining = Math.round((timer.endAt - Date.now()) / 1000);
+  if (remaining <= 0) {
+    timer.endAt = null;
+    saveData(DATA);
+    toast(t('rest_done_toast'));
+    render();
+    return;
+  }
+  const el = document.getElementById(elId);
+  if (el) el.textContent = mmss(remaining);
 }
 
 function toggleWarmup(i) {
   const s = DATA.activeSession;
   s.warmupDone[i] = !s.warmupDone[i];
+  if (isWarmupAllDone(s) && s.warmupTimer) {
+    s.warmupTimer.endAt = null;
+  }
   saveData(DATA);
   render();
 }
