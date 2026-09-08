@@ -245,6 +245,43 @@ function isWarmupAllDone(s) {
   return s.warmupDone.length > 0 && s.warmupDone.every(Boolean);
 }
 
+// ---------- Dźwięk + wibracja po zakończeniu przerwy ----------
+let audioCtx = null;
+function unlockAudio() {
+  try {
+    if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    if (audioCtx.state === 'suspended') audioCtx.resume();
+  } catch (e) { /* Web Audio niedostępne — ignorujemy */ }
+}
+
+function playBeep() {
+  if (!audioCtx) return;
+  try {
+    const now = audioCtx.currentTime;
+    [0, 0.28, 0.56].forEach(offset => {
+      const osc = audioCtx.createOscillator();
+      const gain = audioCtx.createGain();
+      osc.type = 'sine';
+      osc.frequency.value = 880;
+      gain.gain.setValueAtTime(0.0001, now + offset);
+      gain.gain.exponentialRampToValueAtTime(0.35, now + offset + 0.02);
+      gain.gain.exponentialRampToValueAtTime(0.0001, now + offset + 0.22);
+      osc.connect(gain);
+      gain.connect(audioCtx.destination);
+      osc.start(now + offset);
+      osc.stop(now + offset + 0.24);
+    });
+  } catch (e) { /* ignorujemy błędy audio */ }
+}
+
+function notifyRestDone() {
+  playBeep();
+  if (navigator.vibrate) {
+    try { navigator.vibrate([200, 100, 200, 100, 200]); } catch (e) { /* ignorujemy */ }
+  }
+  toast(t('rest_done_toast'));
+}
+
 function renderRestTimer(opts) {
   // opts: { id, timer, disabled, label, onSelect, onStart, onStop, disabledNote }
   const running = !!opts.timer.endAt;
@@ -273,6 +310,7 @@ function setWarmupRestSeconds(val) {
 function startWarmupRest() {
   const s = DATA.activeSession;
   if (isWarmupAllDone(s)) return;
+  unlockAudio();
   s.warmupTimer.endAt = Date.now() + s.warmupTimer.seconds * 1000;
   saveData(DATA);
   render();
@@ -291,6 +329,7 @@ function setExerciseRestSeconds(val) {
 
 function startExerciseRest() {
   const s = DATA.activeSession;
+  unlockAudio();
   s.exerciseTimer.endAt = Date.now() + s.exerciseTimer.seconds * 1000;
   saveData(DATA);
   render();
@@ -472,7 +511,7 @@ function tickRestTimer(timer, elId) {
   if (remaining <= 0) {
     timer.endAt = null;
     saveData(DATA);
-    toast(t('rest_done_toast'));
+    notifyRestDone();
     render();
     return;
   }
