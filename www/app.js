@@ -18,6 +18,14 @@ function esc(s) {
   }[c]));
 }
 
+// ---------- Małe ikonki SVG (inline, bez zewnętrznych zasobów) ----------
+const ICONS = {
+  clock: '<svg class="icon" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"></circle><path d="M12 7v5l3.5 2"></path></svg>',
+  check: '<svg class="icon" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12.5l5 5L20 6.5"></path></svg>',
+  dumbbell: '<svg class="icon" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9v6M2 10.5v3M7 7v10M17 7v10M20 10.5v3M22 9v6"></path><path d="M7 12h10"></path></svg>',
+  calendar: '<svg class="icon" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="16" rx="2"></rect><path d="M3 10h18M8 3v4M16 3v4"></path></svg>'
+};
+
 // ---------- Tłumaczenia (PL / EN) ----------
 function t(key, vars) {
   const lang = (DATA && DATA.lang) || 'pl';
@@ -105,10 +113,12 @@ function confirmDialog(message, onYes) {
 
 function setView(screen, params) {
   VIEW = Object.assign({ screen }, params || {});
-  render();
+  render({ resetScroll: true });
 }
 
-function render() {
+function render(opts) {
+  const resetScroll = !!(opts && opts.resetScroll);
+  const prevScroll = screenEl.scrollTop;
   if (timerInterval) { clearInterval(timerInterval); timerInterval = null; }
 
   navButtons.forEach(b => b.classList.toggle('active', b.dataset.tab === tabForScreen(VIEW.screen)));
@@ -135,7 +145,7 @@ function render() {
 
   topbarTitle.textContent = title;
   backBtn.style.visibility = showBack ? 'visible' : 'hidden';
-  screenEl.scrollTop = 0;
+  screenEl.scrollTop = resetScroll ? 0 : prevScroll;
 }
 
 function tabForScreen(screen) {
@@ -258,18 +268,30 @@ function playBeep() {
   if (!audioCtx) return;
   try {
     const now = audioCtx.currentTime;
-    [0, 0.28, 0.56].forEach(offset => {
-      const osc = audioCtx.createOscillator();
-      const gain = audioCtx.createGain();
-      osc.type = 'sine';
-      osc.frequency.value = 880;
-      gain.gain.setValueAtTime(0.0001, now + offset);
-      gain.gain.exponentialRampToValueAtTime(0.35, now + offset + 0.02);
-      gain.gain.exponentialRampToValueAtTime(0.0001, now + offset + 0.22);
-      osc.connect(gain);
-      gain.connect(audioCtx.destination);
-      osc.start(now + offset);
-      osc.stop(now + offset + 0.24);
+    // Kompresor na końcu łańcucha — pozwala podbić głośność bez przesterowania.
+    const compressor = audioCtx.createDynamicsCompressor();
+    compressor.threshold.setValueAtTime(-14, now);
+    compressor.knee.setValueAtTime(6, now);
+    compressor.ratio.setValueAtTime(10, now);
+    compressor.attack.setValueAtTime(0.002, now);
+    compressor.release.setValueAtTime(0.15, now);
+    compressor.connect(audioCtx.destination);
+
+    // Cztery głośne, dwutonowe (kwinta) sygnały z ostrzejszą falą — dużo lepiej przebijają się niż cichy pojedynczy sinus.
+    [0, 0.3, 0.6, 0.9].forEach(offset => {
+      [880, 1320].forEach(freq => {
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+        osc.type = 'square';
+        osc.frequency.value = freq;
+        gain.gain.setValueAtTime(0.0001, now + offset);
+        gain.gain.exponentialRampToValueAtTime(0.6, now + offset + 0.015);
+        gain.gain.exponentialRampToValueAtTime(0.0001, now + offset + 0.26);
+        osc.connect(gain);
+        gain.connect(compressor);
+        osc.start(now + offset);
+        osc.stop(now + offset + 0.28);
+      });
     });
   } catch (e) { /* ignorujemy błędy audio */ }
 }
@@ -420,39 +442,65 @@ function renderSession() {
     const entry = s.entries[e.id] || [];
     const allDone = entry.length > 0 && entry.every(x => x.done);
     const last = getLastCompletedEntry(e.id, s.date);
-    const lastText = last
-      ? t('last_time_prefix', { date: fmtDate(last.date).full }) + last.sets.map(x => (x.reps || '?') + '×' + (x.kg || '?') + 'kg').join(', ')
-      : t('last_time_none');
 
     const rows = e.sets.map((target, i) => {
       const lastKg = last && last.sets[i] && last.sets[i].kg !== '' ? last.sets[i].kg : null;
+      const lastReps = last && last.sets[i] && last.sets[i].reps !== '' ? last.sets[i].reps : null;
+      const isDone = !!(entry[i] && entry[i].done);
+      const repsVal = entry[i] && entry[i].reps !== '' ? entry[i].reps : target;
+      const kgVal = entry[i] && entry[i].kg !== '' ? entry[i].kg : (lastKg != null ? lastKg : '');
+      const repsInputId = `set-in-${e.id}-${i}-reps`;
+      const kgInputId = `set-in-${e.id}-${i}-kg`;
       return `
-      <tr>
-        <td>${i + 1}</td>
-        <td>
-          <div class="set-suggest">${target}</div>
-          <input class="num-input" type="number" inputmode="numeric" placeholder="${esc(t('input_reps_placeholder'))}" value="${entry[i] && entry[i].reps !== '' ? entry[i].reps : ''}" onchange="updateSetField('${e.id}',${i},'reps',this.value)">
-        </td>
-        <td>
-          <div class="set-suggest">${lastKg != null ? esc(lastKg) + ' kg' : '—'}</div>
-          <input class="num-input" type="number" inputmode="decimal" step="0.5" placeholder="${esc(t('input_kg_placeholder'))}" value="${entry[i] && entry[i].kg !== '' ? entry[i].kg : ''}" onchange="updateSetField('${e.id}',${i},'kg',this.value)">
-        </td>
-      </tr>
+      <div class="set-row">
+        <div class="set-badge">
+          <div class="set-num">${i + 1}</div>
+          <div class="set-num-label">${t('seria_label')}</div>
+        </div>
+        <div class="set-fields">
+          <div class="set-field">
+            <div class="stepper">
+              <button type="button" class="stepper-btn" onclick="adjustSetField('${e.id}',${i},'reps',-1)">−</button>
+              <div class="stepper-box">
+                <div class="stepper-label">${t('reps_target_label', { target: target })}</div>
+                <input id="${repsInputId}" class="stepper-value" type="number" inputmode="numeric" value="${esc(repsVal)}" onchange="updateSetField('${e.id}',${i},'reps',this.value)">
+              </div>
+              <button type="button" class="stepper-btn" onclick="adjustSetField('${e.id}',${i},'reps',1)">+</button>
+            </div>
+            <div class="meta-row">
+              <span class="meta-chip">${ICONS.clock} ${t('split_last_label')} ${lastReps != null ? esc(lastReps) : '—'}</span>
+              <span class="meta-chip ${isDone ? 'is-done' : ''}">${ICONS.check} ${t('label_done')}</span>
+            </div>
+          </div>
+          <div class="set-field">
+            <div class="stepper">
+              <button type="button" class="stepper-btn" onclick="adjustSetField('${e.id}',${i},'kg',-0.5)">−</button>
+              <div class="stepper-box">
+                <div class="stepper-label">${ICONS.dumbbell} ${t('kg_label')}</div>
+                <input id="${kgInputId}" class="stepper-value" type="number" inputmode="decimal" step="0.5" value="${esc(kgVal)}" onchange="updateSetField('${e.id}',${i},'kg',this.value)">
+              </div>
+              <button type="button" class="stepper-btn" onclick="adjustSetField('${e.id}',${i},'kg',0.5)">+</button>
+            </div>
+            <div class="meta-row">
+              <span class="meta-chip">${ICONS.clock} ${t('kg_used_last_label')} ${lastKg != null ? esc(lastKg) + ' kg' : '—'}</span>
+              <span class="meta-chip ${isDone ? 'is-done' : ''}">${ICONS.calendar} ${t('kg_used_today_label')}</span>
+            </div>
+          </div>
+        </div>
+      </div>
     `;
     }).join('');
 
     return `
       <div class="card exercise-card">
         <div class="exercise-head">
-          <span class="group-tag" style="background:${e.color}">${esc(groupLabel(e.group))}</span>
+          <span class="group-tag" style="color:${e.color}">${esc(groupLabel(e.group))}</span>
           <div class="ex-name">${esc(e.name)}</div>
-          <div class="ex-check ${allDone ? 'done' : ''}" onclick="toggleExerciseDone('${e.id}')">${allDone ? '✓' : ''}</div>
+          <div class="ex-check ${allDone ? 'done' : ''}" onclick="toggleExerciseDone('${e.id}')">${allDone ? ICONS.check : ''}</div>
         </div>
-        <div class="last-time">${esc(lastText)}</div>
-        <table class="sets-table">
-          <tr><th>#</th><th>${t('table_reps')}</th><th>${t('table_kg')}</th></tr>
+        <div class="sets-list">
           ${rows}
-        </table>
+        </div>
       </div>
     `;
   });
@@ -556,6 +604,18 @@ function updateSetField(exId, i, field, value) {
   entry[i][field] = value;
   if (value !== '' && entry[i].reps !== '') entry[i].done = true;
   saveData(DATA);
+}
+
+function adjustSetField(exId, i, field, delta) {
+  const inputEl = document.getElementById(`set-in-${exId}-${i}-${field}`);
+  if (!inputEl) return;
+  let val = parseFloat(inputEl.value);
+  if (isNaN(val)) val = 0;
+  val = Math.max(0, val + delta);
+  val = Math.round(val * 100) / 100;
+  const display = field === 'kg' ? (Number.isInteger(val) ? String(val) : val.toFixed(1)) : String(val);
+  inputEl.value = display;
+  updateSetField(exId, i, field, display);
 }
 
 function updateSessionField(field, value) {
