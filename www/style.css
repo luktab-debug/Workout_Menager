@@ -264,7 +264,7 @@ h2:first-child { margin-top: 0; }
 
 /* ---- Karta ćwiczenia ---- */
 .exercise-card { padding: 14px; }
-.exercise-card.is-done { border-color: var(--progress); }
+.exercise-card.is-done { border-color: var(--border-strong); }
 .exercise-head { display: flex; align-items: flex-start; gap: 12px; margin-bottom: 14px; }
 .ex-main { flex: 1; min-width: 0; }
 .ex-meta { display: flex; align-items: center; gap: 10px; margin-bottom: 7px; }
@@ -293,7 +293,7 @@ h2:first-child { margin-top: 0; }
   border-color: var(--text);
   box-shadow: 0 0 0 1px var(--text);
 }
-.set-row.is-done { background: #1b241c; border-color: var(--progress); }
+.set-row.is-done { background: #232323; border-color: var(--border-strong); }
 
 .set-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 12px; }
 .set-title { display: flex; align-items: center; gap: 10px; font-size: 17px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; }
@@ -508,6 +508,7 @@ label.field-label { font-size: 14px; font-weight: 600; color: var(--text-dim); m
 .rest-dock .rt-select { min-height: 52px; font-size: 22px; font-weight: 700; flex: 1; }
 .rest-dock .btn.small { min-height: 52px; min-width: 128px; font-size: 18px; }
 .rest-dock .rd-time { flex: 1; text-align: center; font-size: 46px; font-weight: 700; line-height: 1; font-variant-numeric: tabular-nums; letter-spacing: 0.01em; }
+.rest-dock:not(.running) .btn.small { background: #e53935; color: #fff; }
 .rest-dock.running { background: var(--text); color: #0a0a0a; border-top-color: var(--text); }
 .rest-dock.running .rd-label { color: #444; }
 .rest-dock.running .btn.danger { background: #0a0a0a; color: var(--text); }
