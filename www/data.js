@@ -2,14 +2,14 @@
 // (albo po "Przywróć domyślny plan"). Później wszystko żyje w localStorage.
 
 const GROUP_COLORS = {
-  'NOGI':    '#e35d5d',
-  'PLECY':   '#f0954a',
-  'KLATKA':  '#f2ce4a',
-  'BARKI':   '#f7e35f',
-  'TRICEPS': '#54c1c8',
-  'BICEPS':  '#4f8ff0',
-  'BRZUCH':  '#63c76a',
-  'INNE':    '#9b8bd4'
+  'NOGI':    '#e86262',
+  'PLECY':   '#f59a4f',
+  'KLATKA':  '#f7d34f',
+  'BARKI':   '#fbe765',
+  'TRICEPS': '#58c6cd',
+  'BICEPS':  '#5494f5',
+  'BRZUCH':  '#67cc6e',
+  'INNE':    '#a191d9'
 };
 
 const DEFAULT_WARMUP = [

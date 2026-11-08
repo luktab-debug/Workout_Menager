@@ -304,6 +304,20 @@ function notifyRestDone() {
   toast(t('rest_done_toast'));
 }
 
+// Wersja "dock" — duży stoper przypięty nad dolną nawigacją (łatwo trafić kciukiem)
+function renderRestDock(opts) {
+  const running = !!opts.timer.endAt;
+  const remaining = running ? Math.max(0, Math.round((opts.timer.endAt - Date.now()) / 1000)) : opts.timer.seconds;
+  return `
+    <div class="rest-dock ${running ? 'running' : ''}">
+      <div class="rd-label">${esc(opts.label)}</div>
+      ${running
+        ? `<div class="rd-time" id="${opts.id}">${mmss(remaining)}</div><button class="btn small danger" onclick="${opts.onStop}()">${t('rest_stop_btn')}</button>`
+        : `<select class="rt-select" onchange="${opts.onSelect}(this.value)">${restOptionsHtml(opts.timer.seconds)}</select><button class="btn small" onclick="${opts.onStart}()">${t('rest_start_btn')}</button>`}
+    </div>
+  `;
+}
+
 function renderRestTimer(opts) {
   // opts: { id, timer, disabled, label, onSelect, onStart, onStop, disabledNote }
   const running = !!opts.timer.endAt;
@@ -404,87 +418,70 @@ function renderSession() {
   const ss = Math.floor((elapsed % 60000) / 1000);
 
   const warmupHtml = plan.warmup.map((w, i) => `
-    <div class="warmup-item">
-      <div class="checkbox ${s.warmupDone[i] ? 'checked' : ''}" onclick="toggleWarmup(${i})">${s.warmupDone[i] ? '✓' : ''}</div>
+    <div class="warmup-item" onclick="toggleWarmup(${i})">
+      <div class="checkbox ${s.warmupDone[i] ? 'checked' : ''}">${s.warmupDone[i] ? '✓' : ''}</div>
       <div class="wu-name">${esc(w.name)}</div>
       <div class="wu-target">${esc(w.target)}</div>
     </div>
   `).join('');
 
   const warmupAllDone = isWarmupAllDone(s);
-  const warmupTimerHtml = renderRestTimer({
-    id: 'warmup-rest-display',
-    timer: s.warmupTimer,
-    disabled: warmupAllDone,
-    label: t('warmup_rest_label'),
-    onSelect: 'setWarmupRestSeconds',
-    onStart: 'startWarmupRest',
-    onStop: 'stopWarmupRest',
-    disabledNote: t('warmup_rest_disabled_note')
-  });
+  // Jeden stoper przypięty na dole: w trakcie rozgrzewki stoper rozgrzewki, potem stoper między ćwiczeniami
+  const dockHtml = warmupAllDone
+    ? renderRestDock({ id: 'exercise-rest-display', timer: s.exerciseTimer, label: t('dock_rest_label'), onSelect: 'setExerciseRestSeconds', onStart: 'startExerciseRest', onStop: 'stopExerciseRest' })
+    : renderRestDock({ id: 'warmup-rest-display', timer: s.warmupTimer, label: t('dock_warmup_label'), onSelect: 'setWarmupRestSeconds', onStart: 'startWarmupRest', onStop: 'stopWarmupRest' });
 
-  const doneFlags = plan.exercises.map(e => {
-    const en = s.entries[e.id] || [];
-    return en.length > 0 && en.every(x => x.done);
-  });
-  const lastCompletedIdx = doneFlags.lastIndexOf(true);
-  const exerciseTimerHtml = renderRestTimer({
-    id: 'exercise-rest-display',
-    timer: s.exerciseTimer,
-    disabled: false,
-    label: t('exercise_rest_label'),
-    onSelect: 'setExerciseRestSeconds',
-    onStart: 'startExerciseRest',
-    onStop: 'stopExerciseRest'
-  });
+  let totalSets = 0, doneSets = 0;
+  plan.exercises.forEach(e => { const en = s.entries[e.id] || []; totalSets += e.sets.length; doneSets += en.filter(x => x.done).length; });
+
+  // Aktualna seria = pierwsza niezrobiona seria w planie (podświetlana)
+  let currentKey = null;
+  outer: for (const ex of plan.exercises) {
+    const en = s.entries[ex.id] || [];
+    for (let i = 0; i < ex.sets.length; i++) {
+      if (!(en[i] && en[i].done)) { currentKey = ex.id + ':' + i; break outer; }
+    }
+  }
 
   const exerciseCards = plan.exercises.map((e, idx) => {
     const entry = s.entries[e.id] || [];
     const allDone = entry.length > 0 && entry.every(x => x.done);
+    const doneCount = entry.filter(x => x.done).length;
     const last = getLastCompletedEntry(e.id, s.date);
 
     const rows = e.sets.map((target, i) => {
       const lastKg = last && last.sets[i] && last.sets[i].kg !== '' ? last.sets[i].kg : null;
       const lastReps = last && last.sets[i] && last.sets[i].reps !== '' ? last.sets[i].reps : null;
       const isDone = !!(entry[i] && entry[i].done);
+      const isCurrent = currentKey === e.id + ':' + i;
       const repsVal = entry[i] && entry[i].reps !== '' ? entry[i].reps : target;
       const kgVal = entry[i] && entry[i].kg !== '' ? entry[i].kg : (lastKg != null ? lastKg : '');
       const repsInputId = `set-in-${e.id}-${i}-reps`;
       const kgInputId = `set-in-${e.id}-${i}-kg`;
       return `
-      <div class="set-row">
-        <div class="set-badge">
-          <div class="set-num">${i + 1}</div>
-          <div class="set-num-label">${t('seria_label')}</div>
+      <div class="set-row ${isDone ? 'is-done' : ''} ${isCurrent ? 'is-current' : ''}">
+        <div class="set-head">
+          <div class="set-title"><span class="set-num">${i + 1}</span>${esc(t('set_title', { n: i + 1 }))}</div>
+          <button type="button" class="set-done-btn ${isDone ? 'is-done' : ''}" onclick="toggleSetDone('${e.id}',${i})">${ICONS.check} ${t('set_done_btn')}</button>
         </div>
         <div class="set-fields">
           <div class="set-field">
+            <div class="field-cap"><span>${t('cap_reps')}</span></div>
             <div class="stepper">
               <button type="button" class="stepper-btn" onclick="adjustSetField('${e.id}',${i},'reps',-1)">−</button>
-              <div class="stepper-box">
-                <div class="stepper-label">${t('reps_target_label', { target: target })}</div>
-                <input id="${repsInputId}" class="stepper-value" type="number" inputmode="numeric" value="${esc(repsVal)}" onchange="updateSetField('${e.id}',${i},'reps',this.value)">
-              </div>
+              <div class="stepper-box"><input id="${repsInputId}" class="stepper-value" type="number" inputmode="numeric" value="${esc(repsVal)}" onchange="updateSetField('${e.id}',${i},'reps',this.value)"></div>
               <button type="button" class="stepper-btn" onclick="adjustSetField('${e.id}',${i},'reps',1)">+</button>
             </div>
-            <div class="meta-row">
-              <span class="meta-chip">${ICONS.clock} ${t('split_last_label')} ${lastReps != null ? esc(lastReps) : '—'}</span>
-              <span class="meta-chip ${isDone ? 'is-done' : ''}">${ICONS.check} ${t('label_done')}</span>
-            </div>
+            <div class="field-prev"><span class="cap-target">${esc(t('cap_target', { target: target }))}</span> · ${t('prev_label')}: ${lastReps != null ? esc(lastReps) : '—'}</div>
           </div>
           <div class="set-field">
+            <div class="field-cap"><span>${t('cap_kg')}</span></div>
             <div class="stepper">
               <button type="button" class="stepper-btn" onclick="adjustSetField('${e.id}',${i},'kg',-0.5)">−</button>
-              <div class="stepper-box">
-                <div class="stepper-label">${ICONS.dumbbell} ${t('kg_label')}</div>
-                <input id="${kgInputId}" class="stepper-value" type="number" inputmode="decimal" step="0.5" value="${esc(kgVal)}" onchange="updateSetField('${e.id}',${i},'kg',this.value)">
-              </div>
+              <div class="stepper-box"><input id="${kgInputId}" class="stepper-value" type="number" inputmode="decimal" step="0.5" placeholder="0" value="${esc(kgVal)}" onchange="updateSetField('${e.id}',${i},'kg',this.value)"></div>
               <button type="button" class="stepper-btn" onclick="adjustSetField('${e.id}',${i},'kg',0.5)">+</button>
             </div>
-            <div class="meta-row">
-              <span class="meta-chip">${ICONS.clock} ${t('kg_used_last_label')} ${lastKg != null ? esc(lastKg) + ' kg' : '—'}</span>
-              <span class="meta-chip ${isDone ? 'is-done' : ''}">${ICONS.calendar} ${t('kg_used_today_label')}</span>
-            </div>
+            <div class="field-prev">${t('prev_label')}: ${lastKg != null ? esc(lastKg) + ' kg' : '—'}</div>
           </div>
         </div>
       </div>
@@ -492,10 +489,15 @@ function renderSession() {
     }).join('');
 
     return `
-      <div class="card exercise-card">
+      <div class="card exercise-card ${allDone ? 'is-done' : ''}">
         <div class="exercise-head">
-          <span class="group-tag" style="color:${e.color}">${esc(groupLabel(e.group))}</span>
-          <div class="ex-name">${esc(e.name)}</div>
+          <div class="ex-main">
+            <div class="ex-meta">
+              <span class="group-tag" style="background:${e.color}">${esc(groupLabel(e.group))}</span>
+              <span class="ex-count">${esc(t('sets_progress', { done: doneCount, total: e.sets.length }))}</span>
+            </div>
+            <div class="ex-name">${esc(e.name)}</div>
+          </div>
           <div class="ex-check ${allDone ? 'done' : ''}" onclick="toggleExerciseDone('${e.id}')">${allDone ? ICONS.check : ''}</div>
         </div>
         <div class="sets-list">
@@ -505,31 +507,22 @@ function renderSession() {
     `;
   });
 
-  // Stoper między ćwiczeniami: widoczny dopiero po ukończeniu rozgrzewki.
-  // Na start stoi na górze listy ćwiczeń; po odhaczeniu ćwiczenia przeskakuje pod nie.
-  let exercisesHtml;
-  if (!warmupAllDone) {
-    exercisesHtml = exerciseCards.join('');
-  } else if (lastCompletedIdx === -1) {
-    exercisesHtml = exerciseTimerHtml + exerciseCards.join('');
-  } else {
-    const parts = exerciseCards.slice();
-    parts.splice(lastCompletedIdx + 1, 0, exerciseTimerHtml);
-    exercisesHtml = parts.join('');
-  }
+  const exercisesHtml = exerciseCards.join('');
 
   return `
     ${!s.started ? `<button class="btn" style="margin-bottom:14px;" onclick="beginWorkoutTimer()">${t('session_start_btn')}</button>` : ''}
-    <div class="session-stats">
-      <div class="stat-box"><div class="v" id="session-timer">${String(mm).padStart(2,'0')}:${String(ss).padStart(2,'0')}</div><div class="l">${s.started ? t('stat_time') : t('stat_time_not_started')}</div></div>
-      <div class="stat-box"><div class="v">${plan.exercises.filter(e => (s.entries[e.id]||[]).every(x=>x.done)).length}/${plan.exercises.length}</div><div class="l">${t('stat_exercises')}</div></div>
+    <div class="session-bar">
+      <div class="sb-row">
+        <div class="sb-item"><div class="sb-v timer" id="session-timer">${String(mm).padStart(2,'0')}:${String(ss).padStart(2,'0')}</div><div class="sb-l">${s.started ? t('stat_time') : t('stat_time_not_started')}</div></div>
+        <div class="sb-item"><div class="sb-v">${plan.exercises.filter(e => (s.entries[e.id]||[]).every(x=>x.done)).length}/${plan.exercises.length}</div><div class="sb-l">${t('stat_exercises')}</div></div>
+      </div>
+      <div class="sb-progress"><span style="width:${totalSets ? Math.round(doneSets / totalSets * 100) : 0}%"></span></div>
     </div>
 
-    <h2>${t('warmup_header')} <span style="color:var(--text-dim);font-weight:400;font-size:12px;">(${esc(t('rest_label', { x: plan.warmupRest || '' }))})</span></h2>
+    <h2>${t('warmup_header')} <span class="h2-hint">(${esc(t('rest_label', { x: plan.warmupRest || '' }))})</span></h2>
     <div class="card" style="padding:4px 12px;">${warmupHtml}</div>
-    ${warmupTimerHtml}
 
-    <h2>${t('exercises_header')} <span style="color:var(--text-dim);font-weight:400;font-size:12px;">(${esc(t('rest_label', { x: plan.restBetweenSets || '' }))})</span></h2>
+    <h2>${t('exercises_header')} <span class="h2-hint">(${esc(t('rest_label', { x: plan.restBetweenSets || '' }))})</span></h2>
     ${exercisesHtml}
 
     <h2>${t('notes_header')}</h2>
@@ -541,6 +534,8 @@ function renderSession() {
 
     <button class="btn" style="margin-top:6px;" onclick="finishSession()">${t('finish_btn')}</button>
     <button class="btn ghost" style="margin-top:10px;" onclick="cancelSession()">${t('cancel_session_btn')}</button>
+    <div class="dock-spacer"></div>
+    ${dockHtml}
   `;
 }
 
@@ -589,10 +584,29 @@ function toggleWarmup(i) {
   render();
 }
 
+// Zapisuje do danych wartości aktualnie widoczne w polach serii (także te domyślne: cel / poprzedni ciężar),
+// żeby nic nie zginęło w historii, gdy ktoś tylko odhaczy serię.
+function commitSetValues(exId, i) {
+  const entry = DATA.activeSession.entries[exId];
+  const repsEl = document.getElementById(`set-in-${exId}-${i}-reps`);
+  const kgEl = document.getElementById(`set-in-${exId}-${i}-kg`);
+  if (repsEl && repsEl.value !== '') entry[i].reps = repsEl.value;
+  if (kgEl && kgEl.value !== '') entry[i].kg = kgEl.value;
+}
+
+function toggleSetDone(exId, i) {
+  const entry = DATA.activeSession.entries[exId];
+  if (!entry[i].done) commitSetValues(exId, i);
+  entry[i].done = !entry[i].done;
+  saveData(DATA);
+  render();
+}
+
 function toggleExerciseDone(exId) {
   const s = DATA.activeSession;
   const entry = s.entries[exId];
   const allDone = entry.every(x => x.done);
+  if (!allDone) entry.forEach((x, i) => { if (!x.done) commitSetValues(exId, i); });
   entry.forEach(x => { x.done = !allDone; });
   saveData(DATA);
   render();
@@ -602,7 +616,6 @@ function updateSetField(exId, i, field, value) {
   const s = DATA.activeSession;
   const entry = s.entries[exId];
   entry[i][field] = value;
-  if (value !== '' && entry[i].reps !== '') entry[i].done = true;
   saveData(DATA);
 }
 
@@ -695,8 +708,10 @@ function renderHistoryDetail() {
     return `
       <div class="card exercise-card">
         <div class="exercise-head">
-          <span class="group-tag" style="background:${e.color}">${esc(groupLabel(e.group))}</span>
-          <div class="ex-name">${esc(e.name)}</div>
+          <div class="ex-main">
+            <div class="ex-meta"><span class="group-tag" style="background:${e.color}">${esc(groupLabel(e.group))}</span></div>
+            <div class="ex-name">${esc(e.name)}</div>
+          </div>
         </div>
         <table class="sets-table">
           <tr><th>#</th><th>${t('table_reps_short')}</th><th>Kg</th></tr>
@@ -773,7 +788,7 @@ function renderProgressExercise() {
     sparkline = `
       <div class="spark-wrap">
         <svg viewBox="0 0 ${w} ${h}" width="100%" height="${h}" preserveAspectRatio="none">
-          <polyline points="${pts}" fill="none" stroke="${e.color}" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>
+          <polyline points="${pts}" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>
         </svg>
       </div>`;
   }
