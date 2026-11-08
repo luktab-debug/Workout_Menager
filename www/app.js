@@ -268,38 +268,47 @@ function playBeep() {
   if (!audioCtx) return;
   try {
     const now = audioCtx.currentTime;
-    // Kompresor na końcu łańcucha — pozwala podbić głośność bez przesterowania.
-    const compressor = audioCtx.createDynamicsCompressor();
-    compressor.threshold.setValueAtTime(-14, now);
-    compressor.knee.setValueAtTime(6, now);
-    compressor.ratio.setValueAtTime(10, now);
-    compressor.attack.setValueAtTime(0.002, now);
-    compressor.release.setValueAtTime(0.15, now);
-    compressor.connect(audioCtx.destination);
+    // Łańcuch: oscylatory -> wzmacniacz główny (x1.8) -> limiter -> głośnik.
+    // Limiter pozwala wycisnąć maksimum głośności bez zniekształceń i trzasków.
+    const limiter = audioCtx.createDynamicsCompressor();
+    limiter.threshold.setValueAtTime(-8, now);
+    limiter.knee.setValueAtTime(0, now);
+    limiter.ratio.setValueAtTime(20, now);
+    limiter.attack.setValueAtTime(0.001, now);
+    limiter.release.setValueAtTime(0.1, now);
+    limiter.connect(audioCtx.destination);
+    const master = audioCtx.createGain();
+    master.gain.setValueAtTime(1.8, now);
+    master.connect(limiter);
 
-    // Cztery głośne, dwutonowe (kwinta) sygnały z ostrzejszą falą — dużo lepiej przebijają się niż cichy pojedynczy sinus.
-    [0, 0.3, 0.6, 0.9].forEach(offset => {
-      [880, 1320].forEach(freq => {
+    // Pięć długich, trzytonowych sygnałów (1000 / 2000 / 3000 Hz — ucho najlepiej słyszy 2–4 kHz,
+    // więc to się znacznie lepiej przebija przez hałas siłowni niż niski ton).
+    // Całość trwa ok. 3,5 s.
+    for (let n = 0; n < 5; n++) {
+      const start = now + n * 0.7;
+      [1000, 2000, 3000].forEach((freq, k) => {
         const osc = audioCtx.createOscillator();
         const gain = audioCtx.createGain();
         osc.type = 'square';
         osc.frequency.value = freq;
-        gain.gain.setValueAtTime(0.0001, now + offset);
-        gain.gain.exponentialRampToValueAtTime(0.6, now + offset + 0.015);
-        gain.gain.exponentialRampToValueAtTime(0.0001, now + offset + 0.26);
+        const peak = k === 1 ? 0.7 : 0.45;
+        gain.gain.setValueAtTime(0.0001, start);
+        gain.gain.exponentialRampToValueAtTime(peak, start + 0.01);
+        gain.gain.setValueAtTime(peak, start + 0.45);
+        gain.gain.exponentialRampToValueAtTime(0.0001, start + 0.55);
         osc.connect(gain);
-        gain.connect(compressor);
-        osc.start(now + offset);
-        osc.stop(now + offset + 0.28);
+        gain.connect(master);
+        osc.start(start);
+        osc.stop(start + 0.57);
       });
-    });
+    }
   } catch (e) { /* ignorujemy błędy audio */ }
 }
 
 function notifyRestDone() {
   playBeep();
   if (navigator.vibrate) {
-    try { navigator.vibrate([200, 100, 200, 100, 200]); } catch (e) { /* ignorujemy */ }
+    try { navigator.vibrate([500, 150, 500, 150, 500, 150, 500]); } catch (e) { /* ignorujemy */ }
   }
   toast(t('rest_done_toast'));
 }

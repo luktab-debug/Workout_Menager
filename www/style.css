@@ -158,8 +158,11 @@ button { font-family: inherit; }
   gap: 3px;
   cursor: pointer;
 }
-#navbar button .ic { font-size: 25px; line-height: 1.1; }
-#navbar button.active { color: var(--accent); }
+#navbar button .ic { font-size: 25px; line-height: 1.1; color: var(--nav-c, var(--text)); }
+#navbar button[data-tab=home]    { --nav-c: #cfd4d9; }
+#navbar button[data-tab=history] { --nav-c: #e53935; }
+#navbar button[data-tab=edit]    { --nav-c: #e53935; }
+#navbar button.active { color: var(--text); }
 #navbar button.active::before {
   content: '';
   position: absolute;
@@ -167,7 +170,7 @@ button { font-family: inherit; }
   width: 34px; height: 3px;
   margin-left: -17px;
   border-radius: 0 0 3px 3px;
-  background: var(--accent);
+  background: var(--nav-c, var(--accent));
 }
 
 h2 { font-size: 21px; font-weight: 700; margin: 22px 0 12px; letter-spacing: 0.01em; }
@@ -261,7 +264,7 @@ h2:first-child { margin-top: 0; }
 
 /* ---- Karta ćwiczenia ---- */
 .exercise-card { padding: 14px; }
-.exercise-card.is-done { border-color: var(--border-strong); }
+.exercise-card.is-done { border-color: var(--progress); }
 .exercise-head { display: flex; align-items: flex-start; gap: 12px; margin-bottom: 14px; }
 .ex-main { flex: 1; min-width: 0; }
 .ex-meta { display: flex; align-items: center; gap: 10px; margin-bottom: 7px; }
@@ -274,7 +277,7 @@ h2:first-child { margin-top: 0; }
   cursor: pointer; flex-shrink: 0;
   color: #0a0a0a;
 }
-.ex-check.done { background: var(--accent); border-color: var(--accent); }
+.ex-check.done { background: var(--progress); border-color: var(--progress); }
 .ex-check .icon { width: 22px; height: 22px; }
 
 /* ---- Seria ---- */
@@ -290,7 +293,7 @@ h2:first-child { margin-top: 0; }
   border-color: var(--text);
   box-shadow: 0 0 0 1px var(--text);
 }
-.set-row.is-done { background: #232323; border-color: var(--border-strong); }
+.set-row.is-done { background: #1b241c; border-color: var(--progress); }
 
 .set-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 12px; }
 .set-title { display: flex; align-items: center; gap: 10px; font-size: 17px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; }
@@ -301,7 +304,7 @@ h2:first-child { margin-top: 0; }
   color: var(--text);
   font-size: 17px; font-weight: 700;
 }
-.set-row.is-done .set-num { background: var(--accent); border-color: var(--accent); color: #0a0a0a; }
+.set-row.is-done .set-num { background: var(--progress); border-color: var(--progress); color: #0a0a0a; }
 
 .set-done-btn {
   display: inline-flex; align-items: center; justify-content: center; gap: 8px;
@@ -315,7 +318,7 @@ h2:first-child { margin-top: 0; }
 }
 .set-done-btn .icon { width: 18px; height: 18px; }
 .set-done-btn:active { background: var(--accent-soft); }
-.set-done-btn.is-done { background: var(--accent); border-color: var(--accent); color: #0a0a0a; }
+.set-done-btn.is-done { background: var(--progress); border-color: var(--progress); color: #0a0a0a; }
 
 .set-fields { display: flex; gap: 12px; }
 .set-field { flex: 1; min-width: 0; }
@@ -391,7 +394,7 @@ h2:first-child { margin-top: 0; }
   display: flex; align-items: center; justify-content: center;
   cursor: pointer; flex-shrink: 0; font-size: 19px; font-weight: 800;
 }
-.checkbox.checked { background: var(--accent); border-color: var(--accent); color: #0a0a0a; }
+.checkbox.checked { background: var(--progress); border-color: var(--progress); color: #0a0a0a; }
 
 /* ---- Formularze ---- */
 textarea, input[type=text], input[type=number] {
